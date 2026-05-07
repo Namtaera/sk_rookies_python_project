@@ -20,7 +20,7 @@ def get_geocode(address):
         "version" : "2.0",
         "crs"     : "epsg:4326",
         "format"  : "json",
-        "type"    : "road",
+        "type"    : "parcel",
         "address" : address,
         "key"     : GEO_API_KEY
     }
