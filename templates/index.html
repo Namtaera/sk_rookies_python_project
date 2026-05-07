@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>주소 기반 저가 주유소 조회</title>
 
-    <!-- static/style.css 연결 -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
@@ -12,10 +11,9 @@
     <div class="container">
         <h1>주소 기반 저가 주유소 조회</h1>
         <p class="sub-title">
-            주소를 등록하고, 저장된 주소 기준으로 저가 주유소를 조회할 수 있습니다.
+            주소를 등록하고, 저장된 주소 또는 직접 입력한 주소 기준으로 저가 주유소를 조회할 수 있습니다.
         </p>
 
-        <!-- 안내 메시지 출력 -->
         {% with messages = get_flashed_messages() %}
             {% if messages %}
                 <div class="message-box">
@@ -37,7 +35,7 @@
                         type="text"
                         id="alias"
                         name="alias"
-                        placeholder="예: 집"
+                        placeholder="예: 회사"
                         required
                     >
 
@@ -46,7 +44,7 @@
                         type="text"
                         id="address"
                         name="address"
-                        placeholder="예: 서울 강서구 화곡동 123-45"
+                        placeholder="예: 서울 서초구 서초동 "
                         required
                     >
 
@@ -97,7 +95,7 @@
                         type="text"
                         id="delete_alias"
                         name="delete_alias"
-                        placeholder="예: 집"
+                        placeholder="예: 회사"
                         required
                     >
 
@@ -110,14 +108,40 @@
                 <h2>4. 저가 주유소 조회</h2>
 
                 <form action="{{ url_for('fuel_search_route') }}" method="post">
+                    <label>조회 방식 선택</label>
+
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="search_type" value="alias" checked>
+                            저장된 별칭으로 조회
+                        </label>
+
+                        <label class="radio-label">
+                            <input type="radio" name="search_type" value="direct">
+                            주소 직접 입력으로 조회
+                        </label>
+                    </div>
+
                     <label for="search_alias">조회할 별칭</label>
                     <input
                         type="text"
                         id="search_alias"
                         name="search_alias"
-                        placeholder="예: 집"
-                        required
+                        placeholder="예: 회사"
                     >
+
+                    <label for="direct_address">직접 입력 주소</label>
+                    <input
+                        type="text"
+                        id="direct_address"
+                        name="direct_address"
+                        placeholder="예: 서울 서초구 서초동 "
+                    >
+
+                    <p class="help-text">
+                        저장된 별칭으로 조회할 때는 별칭을 입력하고,
+                        주소 직접 입력으로 조회할 때는 주소를 입력해주세요.
+                    </p>
 
                     <label for="product_code">유종 선택</label>
                     <select id="product_code" name="product_code">
@@ -139,51 +163,6 @@
                     <button type="submit">저가 주유소 조회</button>
                 </form>
             </section>
-
-            <!-- 5. 저가 주유소 조회 결과 -->
-            {% if search_result %}
-                <section class="card">
-                    <h2>5. 저가 주유소 조회 결과</h2>
-
-                    <p class="{% if search_result.success %}success{% else %}fail{% endif %}">
-                        {{ search_result.message }}
-                    </p>
-
-                    <p>
-                        <strong>조회 별칭:</strong> {{ search_result.alias }} /
-                        <strong>유종:</strong> {{ search_result.product_name }} /
-                        <strong>조회 개수:</strong> TOP {{ search_result.count }}
-                    </p>
-
-                    {% if search_result.stations %}
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>순위</th>
-                                    <th>주유소명</th>
-                                    <th>가격</th>
-                                    <th>주소</th>
-                                    <th>상표</th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                {% for station in search_result.stations %}
-                                    <tr>
-                                        <td>{{ loop.index }}</td>
-                                        <td>{{ station.station_name }}</td>
-                                        <td>{{ station.price }}원</td>
-                                        <td>{{ station.address }}</td>
-                                        <td>{{ station.brand }}</td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    {% else %}
-                        <p class="empty-text">출력할 주유소 데이터가 없습니다.</p>
-                    {% endif %}
-                </section>
-            {% endif %}
         </div>
     </div>
 </body>
