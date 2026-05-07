@@ -37,7 +37,7 @@
                             {{ search_result.product_name }} <span class="sort-icon">↕</span>
                         </th>
                         <th class="sortable" id="th-distance" onclick="sortTable('distance')">
-                            거리(m) <span class="sort-icon">↕</span>
+                            거리(km) <span class="sort-icon">↕</span>
                         </th>
                     </tr>
                 </thead>
@@ -71,7 +71,7 @@
                         </td>
                         <td class="dist-col">
                             {% if station.distance is not none %}
-                                {{ "{:,}".format(station.distance) }}m
+                                {{ "%.1f" % (station.distance / 1000) }}km
                             {% else %}-{% endif %}
                         </td>
                     </tr>
@@ -87,7 +87,7 @@
 
 <script>
 let currentSort = null;
-const priceLabel    = "{{ search_result.product_name }}";
+const priceLabel = "{{ search_result.product_name }}";
 
 function sortTable(type) {
     const tbody = document.getElementById('table-body');
@@ -120,7 +120,7 @@ function sortTable(type) {
 
 function setHeaders(type) {
     document.getElementById('th-price').innerHTML    = priceLabel + ' <span class="sort-icon">' + (type === 'price'    ? '▲' : '↕') + '</span>';
-    document.getElementById('th-distance').innerHTML = '거리(m) <span class="sort-icon">'       + (type === 'distance' ? '▲' : '↕') + '</span>';
+    document.getElementById('th-distance').innerHTML = '거리(km) <span class="sort-icon">'      + (type === 'distance' ? '▲' : '↕') + '</span>';
 }
 </script>
 </body>
