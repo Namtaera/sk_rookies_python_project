@@ -1,5 +1,5 @@
 import requests
-from config import OPINET_KEY, BASE_URL
+from api.config import OPINET_KEY, BASE_URL
 
 # 사용자가 입력하는 지역명과 오피넷 시도 코드 매칭
 SIDO_CODES = {
@@ -67,17 +67,17 @@ def get_low_top10(sido_name: str, prodcd: str = "B027") -> list[dict]:
     except requests.exceptions.Timeout:
         print("[opinet] 요청 시간이 초과되었습니다.")
         return []
-    
+
     # 네트워크/API 요청 오류
     except requests.exceptions.RequestException as e:
         print(f"[opinet] API 요청 오류: {e}")
         return []
-    
+
     # JSON 파싱 오류
     except ValueError:
         print("[opinet] JSON 데이터 변환 실패")
         return []
-    
+
     # 기타 예외
     except Exception as e:
         print(f"[opinet] 조회 중 오류 발생: {e}")

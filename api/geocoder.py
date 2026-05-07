@@ -1,5 +1,5 @@
 import requests
-from config import GEO_API_KEY
+from api.config import GEO_API_KEY
 from pyproj import Transformer
 
 #WGS84 -> KATEC 변환 정의
