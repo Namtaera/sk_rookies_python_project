@@ -63,10 +63,25 @@ def get_low_top10(sido_name: str, prodcd: str = "B027") -> list[dict]:
 
         return oil_list
 
+    # 요청 시간 초과
+    except requests.exceptions.Timeout:
+        print("[opinet] 요청 시간이 초과되었습니다.")
+        return []
+    
+    # 네트워크/API 요청 오류
+    except requests.exceptions.RequestException as e:
+        print(f"[opinet] API 요청 오류: {e}")
+        return []
+    
+    # JSON 파싱 오류
+    except ValueError:
+        print("[opinet] JSON 데이터 변환 실패")
+        return []
+    
+    # 기타 예외
     except Exception as e:
         print(f"[opinet] 조회 중 오류 발생: {e}")
         return []
-
 
 # API 원본 데이터를 프로젝트용 딕셔너리 형태로 가공
 def format_oil_data(oil_list: list[dict], sido_name: str) -> list[dict]:
