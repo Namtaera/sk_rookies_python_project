@@ -11,51 +11,44 @@
 
         <div class="result-label">검색 결과</div>
 
-        <h1>
-            {% if search_result.target_address %}
-                {{ search_result.target_address.sido }} {{ search_result.target_address.gu }}
-            {% endif %}
-            지역 최저가 주유소 TOP {{ search_result.stations|length }}
-        </h1>
-        <p class="sub-title">한국석유공사 오피넷 기준 · 거리 50% + 유가 50% 가중치 순으로 정렬했습니다.</p>
+        <h1> "{{ search_result.target_address.sido }} {{ search_result.target_address.gu }}" 주변 주유소 최저가 TOP {{ search_result.count }}</h1>
+        <p class="sub-title">가장 가까운 주유소들을 찾아 가격이 낮은 순서로 정렬했습니다.</p>
 
         <div class="result-summary">
-            <span>총 {{ search_result.stations|length }}개 주유소</span>
-            {% if search_result.target_address %}
-                <span>{{ search_result.target_address.sido }} {{ search_result.target_address.gu }} 기준</span>
-            {% endif %}
+            <span>총 {{ search_result.stations|length }}개 주유소 확인됨</span>
+            <span>유종: {{ search_result.product_name }}</span>
         </div>
 
         <div class="card" style="padding:0; overflow:hidden;">
-            <table class="opinet-table" id="result-table">
+            <table class="opinet-table">
                 <thead>
                     <tr>
+                        <th>순위</th>
+                        <th>상표</th>
                         <th>주유소명</th>
                         <th>주소</th>
-                        <th>상표</th>
-                        <th class="sortable" id="th-price" onclick="sortTable('price')">
-                            {{ search_result.product_name }} <span class="sort-icon">↕</span>
-                        </th>
-                        <th class="sortable" id="th-distance" onclick="sortTable('distance')">
-                            거리(km) <span class="sort-icon">↕</span>
-                        </th>
+                        <th>거리</th>
+                        <th>가격</th>
                     </tr>
                 </thead>
-                <tbody id="table-body">
-                    {% set brand_map = {
-                        'SKE': 'SK에너지', 'GSC': 'GS칼텍스', 'HDO': 'HD현대오일뱅크',
-                        'SOL': 'S-OIL', 'RTO': '자영알뜰', 'RTX': '고속알뜰',
-                        'NHO': 'NH오일', 'EX': '이엑스오일', 'PB': 'PB'
-                    } %}
+                <tbody>
                     {% for station in search_result.stations %}
-                    <tr
-                        class="{% if loop.index == 1 %}rank-first{% elif loop.index <= 3 %}rank-top{% endif %}"
-                        data-price="{{ station.price }}"
-                        data-distance="{{ station.distance if station.distance is not none else 9999999 }}"
-                        data-idx="{{ loop.index0 }}"
-                    >
+                    
+                    {% if loop.index == 1 %}
+                    <tr class="rank-first">
+                    {% elif loop.index == 2 or loop.index == 3 %}
+                    <tr class="rank-top">
+                    {% else %}
+                    <tr>
+                    {% endif %}
+                    
+                        <td class="rank-col">{{ loop.index }}</td>
+                        
+                        <td class="brand-col">{{ station.brand_name }}</td>
+
                         <td class="station-name">
                             {{ station.station_name }}
+                            
                             {% if loop.index == 1 %}
                                 <span class="badge badge-best">BEST</span>
                             {% elif loop.index == 2 %}
@@ -64,16 +57,19 @@
                                 <span class="badge badge-top">TOP 3</span>
                             {% endif %}
                         </td>
+                        
                         <td class="station-addr">{{ station.address }}</td>
-                        <td class="brand-col">{{ brand_map.get(station.brand, station.brand) }}</td>
-                        <td class="price {% if loop.index == 1 %}price-first{% elif loop.index <= 3 %}price-top{% else %}price-normal{% endif %}">
-                            {{ "{:,}".format(station.price) }}원
-                        </td>
-                        <td class="dist-col">
-                            {% if station.distance is not none %}
-                                {{ "%.1f" % (station.distance / 1000) }}km
-                            {% else %}-{% endif %}
-                        </td>
+
+                        <td class="dist-col">{{ station.dist_str }}</td>
+                        
+                        {% if loop.index == 1 %}
+                            <td class="price price-first">{{ station.price_str }}</td>
+                        {% elif loop.index == 2 or loop.index == 3 %}
+                            <td class="price price-top">{{ station.price_str }}</td>
+                        {% else %}
+                            <td class="price price-normal">{{ station.price_str }}</td>
+                        {% endif %}
+                        
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -84,44 +80,5 @@
             <a href="/" class="btn-search">다시 검색하기</a>
         </div>
     </div>
-
-<script>
-let currentSort = null;
-const priceLabel = "{{ search_result.product_name }}";
-
-function sortTable(type) {
-    const tbody = document.getElementById('table-body');
-    const rows  = Array.from(tbody.querySelectorAll('tr'));
-
-    if (currentSort === type) {
-        currentSort = null;
-        rows.sort((a, b) => parseInt(a.dataset.idx) - parseInt(b.dataset.idx));
-        setHeaders(null);
-    } else {
-        currentSort = type;
-        rows.sort((a, b) => parseFloat(a.dataset[type]) - parseFloat(b.dataset[type]));
-        setHeaders(type);
-    }
-
-    rows.forEach((row, i) => {
-        tbody.appendChild(row);
-        row.className = i === 0 ? 'rank-first' : i <= 2 ? 'rank-top' : '';
-
-        const nameTd = row.querySelector('.station-name');
-        nameTd.querySelectorAll('.badge').forEach(b => b.remove());
-        if (i === 0)      nameTd.insertAdjacentHTML('beforeend', '<span class="badge badge-best">BEST</span>');
-        else if (i === 1) nameTd.insertAdjacentHTML('beforeend', '<span class="badge badge-top">TOP 2</span>');
-        else if (i === 2) nameTd.insertAdjacentHTML('beforeend', '<span class="badge badge-top">TOP 3</span>');
-
-        const priceTd = row.querySelector('.price');
-        priceTd.className = 'price ' + (i === 0 ? 'price-first' : i <= 2 ? 'price-top' : 'price-normal');
-    });
-}
-
-function setHeaders(type) {
-    document.getElementById('th-price').innerHTML    = priceLabel + ' <span class="sort-icon">' + (type === 'price'    ? '▲' : '↕') + '</span>';
-    document.getElementById('th-distance').innerHTML = '거리(km) <span class="sort-icon">'      + (type === 'distance' ? '▲' : '↕') + '</span>';
-}
-</script>
 </body>
 </html>
