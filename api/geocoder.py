@@ -49,15 +49,3 @@ def _convert_to_katec(wgs84_x, wgs84_y):
     transformer = Transformer.from_crs("epsg:4326", KATEC_PROJ, always_xy=True)
     katec_x, katec_y = transformer.transform(wgs84_x, wgs84_y)
     return {"x": katec_x, "y": katec_y}
-
-
-if __name__ == "__main__":
-    test_address = "서울특별시 중구 세종대로 110"
-    result = get_geocode(test_address)
-
-    if result:
-        print(f"주소: {test_address}")
-        print(f"KATEC X 좌표: {result['x']}")
-        print(f"KATEC Y 좌표: {result['y']}")
-    else:
-        print("주소 검색 실패")
