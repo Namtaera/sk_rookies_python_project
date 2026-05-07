@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>주소 기반 저가 주유소 조회</title>
+
+    <!-- static/style.css 연결 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <div class="container">
+        <h1>주소 기반 저가 주유소 조회</h1>
+        <p class="sub-title">
+            주소를 등록하고, 저장된 주소 기준으로 저가 주유소를 조회할 수 있습니다.
+        </p>
+
+        <!-- 안내 메시지 출력 -->
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="message-box">
+                    {% for msg in messages %}
+                        <p>{{ msg }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="vertical-layout">
+            <!-- 1. 주소 등록 -->
+            <section class="card">
+                <h2>1. 주소 등록</h2>
+
+                <form action="{{ url_for('create_address_route') }}" method="post">
+                    <label for="alias">별칭</label>
+                    <input
+                        type="text"
+                        id="alias"
+                        name="alias"
+                        placeholder="예: 집"
+                        required
+                    >
+
+                    <label for="address">주소</label>
+                    <input
+                        type="text"
+                        id="address"
+                        name="address"
+                        placeholder="예: 서울 강서구 화곡동 123-45"
+                        required
+                    >
+
+                    <button type="submit">주소 등록</button>
+                </form>
+            </section>
+
+            <!-- 2. 주소 목록 -->
+            <section class="card">
+                <h2>2. 등록된 주소 목록</h2>
+
+                {% if addresses %}
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>번호</th>
+                                <th>별칭</th>
+                                <th>주소</th>
+                                <th>시도</th>
+                                <th>구</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            {% for item in addresses %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td>{{ item.alias }}</td>
+                                    <td>{{ item.address }}</td>
+                                    <td>{{ item.sido }}</td>
+                                    <td>{{ item.gu }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="empty-text">등록된 주소가 없습니다.</p>
+                {% endif %}
+            </section>
+
+            <!-- 3. 주소 삭제 -->
+            <section class="card">
+                <h2>3. 주소 삭제</h2>
+
+                <form action="{{ url_for('delete_address_route') }}" method="post">
+                    <label for="delete_alias">삭제할 별칭</label>
+                    <input
+                        type="text"
+                        id="delete_alias"
+                        name="delete_alias"
+                        placeholder="예: 집"
+                        required
+                    >
+
+                    <button type="submit" class="danger">주소 삭제</button>
+                </form>
+            </section>
+
+            <!-- 4. 저가 주유소 조회 -->
+            <section class="card">
+                <h2>4. 저가 주유소 조회</h2>
+
+                <form action="{{ url_for('fuel_search_route') }}" method="post">
+                    <label for="search_alias">조회할 별칭</label>
+                    <input
+                        type="text"
+                        id="search_alias"
+                        name="search_alias"
+                        placeholder="예: 집"
+                        required
+                    >
+
+                    <label for="product_code">유종 선택</label>
+                    <select id="product_code" name="product_code">
+                        {% for code, name in product_codes.items() %}
+                            <option value="{{ code }}">{{ name }} ({{ code }})</option>
+                        {% endfor %}
+                    </select>
+
+                    <label for="count">조회 개수</label>
+                    <input
+                        type="number"
+                        id="count"
+                        name="count"
+                        value="10"
+                        min="1"
+                        max="20"
+                    >
+
+                    <button type="submit">저가 주유소 조회</button>
+                </form>
+            </section>
+
+            <!-- 5. 저가 주유소 조회 결과 -->
+            {% if search_result %}
+                <section class="card">
+                    <h2>5. 저가 주유소 조회 결과</h2>
+
+                    <p class="{% if search_result.success %}success{% else %}fail{% endif %}">
+                        {{ search_result.message }}
+                    </p>
+
+                    <p>
+                        <strong>조회 별칭:</strong> {{ search_result.alias }} /
+                        <strong>유종:</strong> {{ search_result.product_name }} /
+                        <strong>조회 개수:</strong> TOP {{ search_result.count }}
+                    </p>
+
+                    {% if search_result.stations %}
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>순위</th>
+                                    <th>주유소명</th>
+                                    <th>가격</th>
+                                    <th>주소</th>
+                                    <th>상표</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {% for station in search_result.stations %}
+                                    <tr>
+                                        <td>{{ loop.index }}</td>
+                                        <td>{{ station.station_name }}</td>
+                                        <td>{{ station.price }}원</td>
+                                        <td>{{ station.address }}</td>
+                                        <td>{{ station.brand }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <p class="empty-text">출력할 주유소 데이터가 없습니다.</p>
+                    {% endif %}
+                </section>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
