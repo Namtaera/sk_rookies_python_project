@@ -26,7 +26,7 @@ def get_geocode(address):
     }
 
     try:
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=5)
         response.raise_for_status()
 
         data = response.json()
@@ -52,7 +52,7 @@ def get_geocode(address):
     except requests.exceptions.RequestException as e:
         print(f"[geocoder] API 요청 오류: {e}")
         return None
-    
+
     # 기타 예외
     except Exception as e:
         print(f"[geocoder] 주소 검색 중 오류 발생: {e}")
