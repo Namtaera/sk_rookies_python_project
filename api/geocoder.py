@@ -1,5 +1,5 @@
 import requests
-from config import GEO_API_KEY
+from api.config import GEO_API_KEY
 from pyproj import Transformer
 
 #WGS84 -> KATEC 변환 정의
@@ -26,20 +26,34 @@ def get_geocode(address):
     }
 
     try:
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=5)
         response.raise_for_status()
+
         data = response.json()
 
+        # 주소 검색 실패
         if data["response"]['status']!="OK":
             print(f"[geocoder] 주소 검색 실패: {data['response']['status']}")
             return None
         
         point = data["response"]["result"]["point"]
+        
         wgs84_x = float(point["x"]) #경도
         wgs84_y = float(point["y"]) #위도
 
         return _convert_to_katec(wgs84_x, wgs84_y)
     
+    # 요청 시간 초과
+    except requests.exceptions.Timeout:
+        print("[geocoder] 요청 시간이 초과되었습니다.")
+        return None
+
+    # 네트워크/API 요청 오류
+    except requests.exceptions.RequestException as e:
+        print(f"[geocoder] API 요청 오류: {e}")
+        return None
+
+    # 기타 예외
     except Exception as e:
         print(f"[geocoder] 주소 검색 중 오류 발생: {e}")
         return None
