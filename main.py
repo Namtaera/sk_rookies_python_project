@@ -314,6 +314,7 @@ def fuel_search_route():
     return render_template("result.html", search_result=search_result)
 
 
+
 # =========================
 # 9. 실행
 # =========================
