@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>저가 주유소 조회 결과</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <div class="container">
+        <h1>저가 주유소 조회 결과 페이지</h1>
+
+        <section class="card">
+            <h2>페이지 연결 확인</h2>
+
+            <p class="{% if search_result.success %}success{% else %}fail{% endif %}">
+                {{ search_result.message }}
+            </p>
+
+            {% if search_result.target_address %}
+                <p><strong>조회 기준 주소:</strong> {{ search_result.target_address.address }}</p>
+                <p><strong>지역:</strong> {{ search_result.target_address.sido }} {{ search_result.target_address.gu }}</p>
+            {% endif %}
+
+            <p><strong>유종:</strong> {{ search_result.product_name }} ({{ search_result.product_code }})</p>
+            <p><strong>조회 개수:</strong> TOP {{ search_result.count }}</p>
+
+            <p class="help-text">
+                이 파일은 임시 result.html입니다. 결과 페이지 담당자가 이 화면을 수정하면 됩니다.
+            </p>
+        </section>
+
+        <a class="back-link" href="{{ url_for('index') }}">메인으로 돌아가기</a>
+    </div>
+</body>
+</html>

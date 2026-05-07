@@ -22,14 +22,12 @@ h1 {
     margin-bottom: 24px;
 }
 
-/* 전체 섹션을 세로로 배치 */
 .vertical-layout {
     display: flex;
     flex-direction: column;
     gap: 20px;
 }
 
-/* 각 기능 카드 */
 .card {
     background-color: white;
     padding: 24px;
@@ -42,7 +40,6 @@ h2 {
     font-size: 20px;
 }
 
-/* 입력 label */
 label {
     display: block;
     margin-top: 12px;
@@ -50,7 +47,6 @@ label {
     font-weight: bold;
 }
 
-/* 입력창, 선택창 */
 input,
 select {
     width: 100%;
@@ -61,12 +57,11 @@ select {
     font-size: 14px;
 }
 
-/* 기본 버튼 */
 button {
     width: 100%;
     margin-top: 16px;
     padding: 11px;
-    background-color: #9a9a9a;
+    background-color: #b9b9b9;
     color: white;
     border: none;
     border-radius: 8px;
@@ -76,19 +71,17 @@ button {
 }
 
 button:hover {
-    background-color: #9a9a9a;
+    background-color: #8e8e8e;
 }
 
-/* 삭제 버튼 */
 button.danger {
-    background-color: #ffa3a3;
+    background-color: #ffa4a4;
 }
 
 button.danger:hover {
-    background-color: #d94a4a;
+    background-color: #f08787;
 }
 
-/* 안내 메시지 박스 */
 .message-box {
     background-color: #fff4d6;
     border: 1px solid #ffd36e;
@@ -101,12 +94,10 @@ button.danger:hover {
     margin: 4px 0;
 }
 
-/* 빈 데이터 문구 */
 .empty-text {
     color: #777;
 }
 
-/* 성공/실패 메시지 */
 .success {
     color: #1f8f4d;
     font-weight: bold;
@@ -117,7 +108,6 @@ button.danger:hover {
     font-weight: bold;
 }
 
-/* 테이블 */
 table {
     width: 100%;
     border-collapse: collapse;
@@ -136,7 +126,41 @@ th {
     background-color: #f0f2f5;
 }
 
-/* 화면이 좁아졌을 때 */
+.radio-group {
+    margin-top: 8px;
+    margin-bottom: 12px;
+}
+
+.radio-label {
+    display: block;
+    margin-top: 6px;
+    font-weight: normal;
+}
+
+.radio-label input {
+    width: auto;
+    margin-right: 6px;
+}
+
+.help-text {
+    margin-top: 8px;
+    color: #777;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.back-link {
+    display: inline-block;
+    margin-top: 20px;
+    color: #a7a7a7;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
 @media (max-width: 800px) {
     .container {
         padding: 20px;
