@@ -1,29 +1,12 @@
-"""
-Flask + HTML 입력 페이지 구성 파일
-
-이 파일의 역할:
-- 사용자가 웹 화면에서 입력한 값을 Flask route에서 받는다.
-- 주소를 임시 리스트(address_book)에 등록/삭제한다.
-- 저가 주유소 조회 시,
-  1) 저장된 별칭으로 조회하거나
-  2) 주소를 직접 입력해서 조회할 수 있게 한다.
-- 조회 버튼을 누르면 결과를 index.html 하단에 붙이지 않고 result.html 페이지로 넘긴다.
-
-담당 기능:
-1. 주소 등록 form에서 별칭/주소 입력값 받기
-2. 등록된 주소 목록 조회
-3. 별칭 기준 주소 삭제
-4. 별칭 또는 직접 주소 기준 저가 주유소 조회 route 처리
-"""
-
 from flask import Flask, render_template, request, redirect, url_for, flash
-import math # 거리 계산을 위해 추가
+import math
 
 from api.config import FLASK_SECRET_KEY
-from api.opinet import get_around_all, get_detail_by_id, format_around_data
-from api.geocoder import get_geocode # 지오코더 API 추가
+from api.opinet import get_low_top10, format_oil_data
+from api.geocoder import get_geocode
 from utils.validator import validate_address, validate_coordinates, validate_oil_list
 from utils.report import save_report
+
 
 # =========================
 # 1. Flask 앱 생성
@@ -68,23 +51,62 @@ BRAND_NAMES = {
     "PB": "PB",
 }
 
+# 시도명 정규화용 매핑
+SIDO_NAME_MAP = {
+    "서울특별시": "서울",
+    "부산광역시": "부산",
+    "대구광역시": "대구",
+    "인천광역시": "인천",
+    "광주광역시": "광주",
+    "대전광역시": "대전",
+    "울산광역시": "울산",
+    "세종특별자치시": "세종",
+    "제주특별자치도": "제주",
+    "경기도": "경기",
+    "강원도": "강원",
+    "충청북도": "충북",
+    "충청남도": "충남",
+    "전라북도": "전북",
+    "전북특별자치도": "전북",
+    "전라남도": "전남",
+    "경상북도": "경북",
+    "경상남도": "경남",
+}
+
+
 # =========================
 # 4. 보조 함수
 # =========================
 
+def normalize_sido_name(sido):
+    """광역시/도 전체 이름을 오피넷용 짧은 시도명으로 변환"""
+    return SIDO_NAME_MAP.get(sido, sido)
+
+
 def extract_sido_gu(address):
+    """
+    주소에서 시도와 구/군을 추출하는 함수
+    예:
+    - 서울특별시 강서구 화곡동 -> 서울, 강서구
+    - 경기도 성남시 분당구 -> 경기, 성남시
+    """
     words = address.strip().split()
+
     if len(words) < 2:
         return None, None
-    sido = words[0]
+
+    sido = normalize_sido_name(words[0])
     gu = words[1]
+
     return sido, gu
+
 
 def find_address_by_alias(alias):
     for item in address_book:
         if item["alias"] == alias:
             return item
     return None
+
 
 def parse_count(raw_count):
     try:
@@ -98,9 +120,24 @@ def parse_count(raw_count):
         return 20
     return count
 
+
 def get_distance(x1, y1, x2, y2):
-    """두 좌표 사이의 거리를 계산하는 함수"""
-    return math.sqrt((x1 - x2)**2 + (y1 - y2)**2)
+    """두 좌표 사이의 직선거리를 계산하는 함수"""
+    return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+
+
+def filter_stations_by_gu(stations, gu):
+    """
+    주유소 주소에 입력한 구/군명이 포함된 데이터만 필터링
+    """
+    filtered = []
+
+    for station in stations:
+        address = station.get("address", "")
+        if gu in address:
+            filtered.append(station)
+
+    return filtered
 
 
 # =========================
@@ -126,6 +163,7 @@ def add_address(alias, address):
         "gu": gu,
     })
     return True, "주소가 등록되었습니다."
+
 
 def delete_address(alias):
     target = find_address_by_alias(alias)
@@ -159,7 +197,7 @@ def make_target_address_by_direct_input(direct_address):
 
 
 def search_low_price_stations(search_type, alias, direct_address, product_code, count):
-    # 조회 기준 주소 결정
+    # 1) 조회 기준 주소 결정
     if search_type == "alias":
         target_address = find_address_by_alias(alias)
         if not target_address:
@@ -174,11 +212,12 @@ def search_low_price_stations(search_type, alias, direct_address, product_code, 
     sido = target_address["sido"]
     gu = target_address["gu"]
 
-    # 사용자 주소의 좌표 구하기
+    # 2) 사용자 주소 좌표 구하기
     user_coords = get_geocode(target_address["address"])
+
     if user_coords is None:
-        # 상세 주소 검색 실패 시 시도+구 이름으로 재검색
-        user_coords = get_geocode(sido + " " + gu)
+        # 상세주소가 검색 실패하면 시도 + 구까지만 재시도
+        user_coords = get_geocode(f"{sido} {gu}")
 
     coordinate_error = validate_coordinates(user_coords)
     if coordinate_error:
@@ -187,66 +226,71 @@ def search_low_price_stations(search_type, alias, direct_address, product_code, 
     user_x = user_coords["x"]
     user_y = user_coords["y"]
 
-    # 상세 주소(좌표) 기준 반경 내 주유소 조회
-    # radius는 최대 5000m. 여기서는 충분한 후보를 확보하기 위해 최대값 사용.
-    oil_list = get_around_all(x=user_x, y=user_y, radius=5000, prodcd=product_code, sort=1)
+    # 3) 시도 단위 TOP10 조회
+    oil_list = get_low_top10(sido_name=sido, prodcd=product_code)
 
     oil_error = validate_oil_list(oil_list)
     if oil_error:
         return False, oil_error, target_address, []
 
-    # aroundAll 응답에는 주소가 없어, 결과로 보여줄 상위 후보만 상세조회로 주소를 채운다.
-    # (API 호출을 최소화하기 위해 count보다 조금 넉넉히 조회 후 보강)
-    candidate_ids: list[str] = []
-    for oil in oil_list:
-        station_id = oil.get("UNI_ID")
-        if station_id:
-            candidate_ids.append(station_id)
-        if len(candidate_ids) >= max(count, 10):
-            break
+    formatted_data = format_oil_data(oil_list, sido)
 
-    address_by_id: dict[str, dict] = {}
-    for station_id in candidate_ids:
-        detail = get_detail_by_id(station_id)
-        if detail:
-            address_by_id[station_id] = detail
+    # 4) 구/군 필터 적용
+    gu_filtered_data = filter_stations_by_gu(formatted_data, gu)
 
-    formatted_data = format_around_data(oil_list, address_by_id=address_by_id)
+    if not gu_filtered_data:
+        return False, f"{sido} {gu} 기준 주유소 조회 결과가 없습니다.", target_address, []
 
-    def _to_float(val):
-        try:
-            return float(val)
-        except (TypeError, ValueError):
-            return None
+    # 5) 거리 계산
+    for station in gu_filtered_data:
+        station_addr = station.get("address")
 
-    def _to_int(val):
-        try:
-            return int(float(val))
-        except (TypeError, ValueError):
-            return None
+        if not station_addr:
+            station["distance"] = None
+            continue
 
-    # 주변 주유소는 distance(미터)가 같이 오므로 이를 우선 기준으로 가까운 순 정렬
-    formatted_data.sort(key=lambda s: _to_float(s.get("distance")) if _to_float(s.get("distance")) is not None else 999999999)
+        station_coords = get_geocode(station_addr)
 
-    top_stations = formatted_data[:count]
+        if station_coords is not None:
+            dist = get_distance(user_x, user_y, station_coords["x"], station_coords["y"])
+            station["distance"] = round(dist)
+        else:
+            station["distance"] = None
 
-    # 가까운 후보들 중 가격 낮은 순으로 다시 정렬
-    top_stations.sort(key=lambda s: _to_int(s.get("price")) if _to_int(s.get("price")) is not None else 999999999)
+    # 6) 거리순 정렬 후 count개 추출
+    def sort_by_distance(station):
+        if station.get("distance") is None:
+            return 999999
+        return station.get("distance")
 
+    gu_filtered_data.sort(key=sort_by_distance)
+    top_stations = gu_filtered_data[:count]
+
+    # 7) 가격순 재정렬
+    def sort_by_price(station):
+        if station.get("price") is None:
+            return 999999
+        return int(station.get("price"))
+
+    top_stations.sort(key=sort_by_price)
+
+    # 8) 화면 표시용 값 추가
     for station in top_stations:
-
         brand_code = station.get("brand", "-")
         station["brand_name"] = BRAND_NAMES.get(brand_code, brand_code)
-        
-        price_val = int(station.get('price', 0))
-        station['price_str'] = f"{price_val:,}원"
-        
-        dist_val = station.get('distance')
+
+        try:
+            price_val = int(station.get("price", 0))
+            station["price_str"] = f"{price_val:,}원"
+        except (ValueError, TypeError):
+            station["price_str"] = "-"
+
+        dist_val = station.get("distance")
         if dist_val is not None:
-            dist_km = round(float(dist_val) / 1000, 1)
-            station['dist_str'] = f"{dist_km}km"
+            dist_km = round(dist_val / 1000, 1)
+            station["dist_str"] = f"{dist_km}km"
         else:
-            station['dist_str'] = "-"
+            station["dist_str"] = "-"
 
     save_report(top_stations)
 
@@ -265,6 +309,7 @@ def index():
         product_codes=PRODUCT_CODES,
     )
 
+
 @app.route("/address/create", methods=["POST"])
 def create_address_route():
     alias = request.form.get("alias", "").strip()
@@ -276,8 +321,8 @@ def create_address_route():
 
     success, message = add_address(alias, address)
     flash(message)
-
     return redirect(url_for("index"))
+
 
 @app.route("/address/delete", methods=["POST"])
 def delete_address_route():
@@ -289,8 +334,8 @@ def delete_address_route():
 
     success, message = delete_address(alias)
     flash(message)
-
     return redirect(url_for("index"))
+
 
 @app.route("/fuel/search", methods=["POST"])
 def fuel_search_route():
@@ -319,6 +364,10 @@ def fuel_search_route():
         count=count,
     )
 
+    if not success:
+        flash(message)
+        return redirect(url_for("index"))
+
     search_result = {
         "success": success,
         "message": message,
@@ -336,6 +385,7 @@ def fuel_search_route():
         "result.html",
         search_result=search_result
     )
+
 
 # =========================
 # 8. 실행
