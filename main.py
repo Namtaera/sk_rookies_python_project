@@ -1,16 +1,11 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
-import math
 
 from api.config import FLASK_SECRET_KEY
-from api.opinet import get_low_top10, format_oil_data
+from api.opinet import get_around_stations, format_around_oil_data
 from api.geocoder import get_geocode
 from utils.validator import validate_address, validate_coordinates, validate_oil_list
 from utils.report import save_report
 
-
-# =========================
-# 1. Flask 앱 생성
-# =========================
 
 app = Flask(__name__)
 
@@ -19,17 +14,7 @@ if not FLASK_SECRET_KEY:
 
 app.secret_key = FLASK_SECRET_KEY
 
-
-# =========================
-# 2. 임시 주소 저장소
-# =========================
-
 address_book = []
-
-
-# =========================
-# 3. 기본 데이터
-# =========================
 
 PRODUCT_CODES = {
     "B027": "보통휘발유",
@@ -51,9 +36,9 @@ BRAND_NAMES = {
     "PB": "PB",
 }
 
-# 시도명 정규화용 매핑
 SIDO_NAME_MAP = {
     "서울특별시": "서울",
+    "서울시": "서울",
     "부산광역시": "부산",
     "대구광역시": "대구",
     "인천광역시": "인천",
@@ -74,30 +59,17 @@ SIDO_NAME_MAP = {
 }
 
 
-# =========================
-# 4. 보조 함수
-# =========================
-
 def normalize_sido_name(sido):
-    """광역시/도 전체 이름을 오피넷용 짧은 시도명으로 변환"""
     return SIDO_NAME_MAP.get(sido, sido)
 
 
 def extract_sido_gu(address):
-    """
-    주소에서 시도와 구/군을 추출하는 함수
-    예:
-    - 서울특별시 강서구 화곡동 -> 서울, 강서구
-    - 경기도 성남시 분당구 -> 경기, 성남시
-    """
     words = address.strip().split()
-
     if len(words) < 2:
         return None, None
 
     sido = normalize_sido_name(words[0])
     gu = words[1]
-
     return sido, gu
 
 
@@ -121,29 +93,6 @@ def parse_count(raw_count):
     return count
 
 
-def get_distance(x1, y1, x2, y2):
-    """두 좌표 사이의 직선거리를 계산하는 함수"""
-    return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
-
-
-def filter_stations_by_gu(stations, gu):
-    """
-    주유소 주소에 입력한 구/군명이 포함된 데이터만 필터링
-    """
-    filtered = []
-
-    for station in stations:
-        address = station.get("address", "")
-        if gu in address:
-            filtered.append(station)
-
-    return filtered
-
-
-# =========================
-# 5. 주소 등록 / 삭제 함수
-# =========================
-
 def add_address(alias, address):
     error_message = validate_address(address)
     if error_message:
@@ -154,7 +103,7 @@ def add_address(alias, address):
 
     sido, gu = extract_sido_gu(address)
     if not sido or not gu:
-        return False, "주소는 '서울 강서구 ...'처럼 시도와 구를 포함해서 입력해주세요."
+        return False, "주소는 '경기도 고양시 ...'처럼 시도와 시/구를 포함해서 입력해주세요."
 
     address_book.append({
         "alias": alias,
@@ -162,6 +111,7 @@ def add_address(alias, address):
         "sido": sido,
         "gu": gu,
     })
+
     return True, "주소가 등록되었습니다."
 
 
@@ -174,10 +124,6 @@ def delete_address(alias):
     return True, "주소가 삭제되었습니다."
 
 
-# =========================
-# 6. 저가 주유소 조회 함수
-# =========================
-
 def make_target_address_by_direct_input(direct_address):
     error_message = validate_address(direct_address)
     if error_message:
@@ -185,19 +131,17 @@ def make_target_address_by_direct_input(direct_address):
 
     sido, gu = extract_sido_gu(direct_address)
     if not sido or not gu:
-        return None, "주소는 '서울 강서구 ...'처럼 시도와 구를 포함해서 입력해주세요."
+        return None, "주소는 '경기도 고양시 ...'처럼 시도와 시/구를 포함해서 입력해주세요."
 
-    target_address = {
+    return {
         "alias": "직접 입력 주소",
         "address": direct_address,
         "sido": sido,
         "gu": gu,
-    }
-    return target_address, None
+    }, None
 
 
 def search_low_price_stations(search_type, alias, direct_address, product_code, count):
-    # 1) 조회 기준 주소 결정
     if search_type == "alias":
         target_address = find_address_by_alias(alias)
         if not target_address:
@@ -212,11 +156,9 @@ def search_low_price_stations(search_type, alias, direct_address, product_code, 
     sido = target_address["sido"]
     gu = target_address["gu"]
 
-    # 2) 사용자 주소 좌표 구하기
     user_coords = get_geocode(target_address["address"])
 
     if user_coords is None:
-        # 상세주소가 검색 실패하면 시도 + 구까지만 재시도
         user_coords = get_geocode(f"{sido} {gu}")
 
     coordinate_error = validate_coordinates(user_coords)
@@ -226,55 +168,28 @@ def search_low_price_stations(search_type, alias, direct_address, product_code, 
     user_x = user_coords["x"]
     user_y = user_coords["y"]
 
-    # 3) 시도 단위 TOP10 조회
-    oil_list = get_low_top10(sido_name=sido, prodcd=product_code)
+    oil_list = get_around_stations(
+        x=user_x,
+        y=user_y,
+        radius=5000,
+        prodcd=product_code
+    )
 
     oil_error = validate_oil_list(oil_list)
     if oil_error:
         return False, oil_error, target_address, []
 
-    formatted_data = format_oil_data(oil_list, sido)
+    formatted_data = format_around_oil_data(oil_list)
 
-    # 4) 구/군 필터 적용
-    gu_filtered_data = filter_stations_by_gu(formatted_data, gu)
-
-    if not gu_filtered_data:
-        return False, f"{sido} {gu} 기준 주유소 조회 결과가 없습니다.", target_address, []
-
-    # 5) 거리 계산
-    for station in gu_filtered_data:
-        station_addr = station.get("address")
-
-        if not station_addr:
-            station["distance"] = None
-            continue
-
-        station_coords = get_geocode(station_addr)
-
-        if station_coords is not None:
-            dist = get_distance(user_x, user_y, station_coords["x"], station_coords["y"])
-            station["distance"] = round(dist)
-        else:
-            station["distance"] = None
-
-    # 6) 거리순 정렬 후 count개 추출
-    def sort_by_distance(station):
-        if station.get("distance") is None:
-            return 999999
-        return station.get("distance")
-
-    gu_filtered_data.sort(key=sort_by_distance)
-    top_stations = gu_filtered_data[:count]
-
-    # 7) 가격순 재정렬
     def sort_by_price(station):
-        if station.get("price") is None:
+        try:
+            return int(station.get("price"))
+        except (TypeError, ValueError):
             return 999999
-        return int(station.get("price"))
 
-    top_stations.sort(key=sort_by_price)
+    formatted_data.sort(key=sort_by_price)
+    top_stations = formatted_data[:count]
 
-    # 8) 화면 표시용 값 추가
     for station in top_stations:
         brand_code = station.get("brand", "-")
         station["brand_name"] = BRAND_NAMES.get(brand_code, brand_code)
@@ -282,24 +197,22 @@ def search_low_price_stations(search_type, alias, direct_address, product_code, 
         try:
             price_val = int(station.get("price", 0))
             station["price_str"] = f"{price_val:,}원"
-        except (ValueError, TypeError):
+        except (TypeError, ValueError):
             station["price_str"] = "-"
 
         dist_val = station.get("distance")
         if dist_val is not None:
-            dist_km = round(dist_val / 1000, 1)
-            station["dist_str"] = f"{dist_km}km"
+            try:
+                station["dist_str"] = f"{round(float(dist_val) / 1000, 1)}km"
+            except (TypeError, ValueError):
+                station["dist_str"] = "-"
         else:
             station["dist_str"] = "-"
 
     save_report(top_stations)
 
-    return True, f"{sido} {gu} 기준 저가 주유소 조회가 완료되었습니다.", target_address, top_stations
+    return True, f"{sido} {gu} 기준 주변 저가 주유소 조회가 완료되었습니다.", target_address, top_stations
 
-
-# =========================
-# 7. Flask Route
-# =========================
 
 @app.route("/")
 def index():
@@ -321,6 +234,7 @@ def create_address_route():
 
     success, message = add_address(alias, address)
     flash(message)
+
     return redirect(url_for("index"))
 
 
@@ -334,6 +248,7 @@ def delete_address_route():
 
     success, message = delete_address(alias)
     flash(message)
+
     return redirect(url_for("index"))
 
 
@@ -386,10 +301,6 @@ def fuel_search_route():
         search_result=search_result
     )
 
-
-# =========================
-# 8. 실행
-# =========================
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
