@@ -20,7 +20,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 import math # 거리 계산을 위해 추가
 
 from api.config import FLASK_SECRET_KEY
-from api.opinet import get_low_top10, format_oil_data
+from api.opinet import get_around_all, get_detail_by_id, format_around_data
 from api.geocoder import get_geocode # 지오코더 API 추가
 from utils.validator import validate_address, validate_coordinates, validate_oil_list
 from utils.report import save_report
@@ -187,46 +187,51 @@ def search_low_price_stations(search_type, alias, direct_address, product_code, 
     user_x = user_coords["x"]
     user_y = user_coords["y"]
 
-    oil_list = get_low_top10(sido_name=sido, prodcd=product_code)
+    # 상세 주소(좌표) 기준 반경 내 주유소 조회
+    # radius는 최대 5000m. 여기서는 충분한 후보를 확보하기 위해 최대값 사용.
+    oil_list = get_around_all(x=user_x, y=user_y, radius=5000, prodcd=product_code, sort=1)
 
     oil_error = validate_oil_list(oil_list)
     if oil_error:
         return False, oil_error, target_address, []
 
-    formatted_data = format_oil_data(oil_list, sido)
+    # aroundAll 응답에는 주소가 없어, 결과로 보여줄 상위 후보만 상세조회로 주소를 채운다.
+    # (API 호출을 최소화하기 위해 count보다 조금 넉넉히 조회 후 보강)
+    candidate_ids: list[str] = []
+    for oil in oil_list:
+        station_id = oil.get("UNI_ID")
+        if station_id:
+            candidate_ids.append(station_id)
+        if len(candidate_ids) >= max(count, 10):
+            break
 
+    address_by_id: dict[str, dict] = {}
+    for station_id in candidate_ids:
+        detail = get_detail_by_id(station_id)
+        if detail:
+            address_by_id[station_id] = detail
 
-    for station in formatted_data:
-        station_addr = station.get("address")
-        
+    formatted_data = format_around_data(oil_list, address_by_id=address_by_id)
 
-        if not station_addr:
-            station["distance"] = None
-            continue
+    def _to_float(val):
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
 
-        station_coords = get_geocode(station_addr)
-        if station_coords is not None:
-            dist = get_distance(user_x, user_y, station_coords["x"], station_coords["y"])
-            station["distance"] = round(dist)
-        else:
-            station["distance"] = None
+    def _to_int(val):
+        try:
+            return int(float(val))
+        except (TypeError, ValueError):
+            return None
 
-    def sort_by_distance(station):
-        if station.get("distance") is None:
-            return 999999
-        return station.get("distance")
-
-    formatted_data.sort(key=sort_by_distance)
+    # 주변 주유소는 distance(미터)가 같이 오므로 이를 우선 기준으로 가까운 순 정렬
+    formatted_data.sort(key=lambda s: _to_float(s.get("distance")) if _to_float(s.get("distance")) is not None else 999999999)
 
     top_stations = formatted_data[:count]
 
-
-    def sort_by_price(station):
-        if station.get("price") is None:
-            return 999999
-        return int(station.get("price"))
-
-    top_stations.sort(key=sort_by_price)
+    # 가까운 후보들 중 가격 낮은 순으로 다시 정렬
+    top_stations.sort(key=lambda s: _to_int(s.get("price")) if _to_int(s.get("price")) is not None else 999999999)
 
     for station in top_stations:
 
@@ -238,7 +243,7 @@ def search_low_price_stations(search_type, alias, direct_address, product_code, 
         
         dist_val = station.get('distance')
         if dist_val is not None:
-            dist_km = round(dist_val / 1000, 1)
+            dist_km = round(float(dist_val) / 1000, 1)
             station['dist_str'] = f"{dist_km}km"
         else:
             station['dist_str'] = "-"
